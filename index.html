@@ -30,10 +30,34 @@
 
   header{
     padding:12px 16px 10px; background:var(--card); border-bottom:1px solid var(--border);
-    display:flex; align-items:center; gap:10px; z-index:20;
+    display:flex; align-items:center; gap:10px; z-index:20; flex-wrap:wrap;
   }
-  header h1{font-size:17px; margin:0; font-weight:700; flex:1;}
+  header h1{font-size:17px; margin:0; font-weight:700; flex:1; min-width:200px;}
   header h1 .sub{display:block; font-size:11px; font-weight:500; color:var(--muted); margin-top:1px;}
+
+  #search-row{
+    display:flex; align-items:center; gap:8px; width:100%; order:3;
+    margin-top:2px; position:relative;
+  }
+  #search-input{
+    flex:1; border:1px solid var(--border); background:var(--bg); border-radius:10px;
+    padding:9px 12px; font-size:14px; color:var(--text); min-width:0;
+  }
+  #search-input:focus{outline:none; border-color:var(--accent);}
+  #search-btn{
+    background:var(--accent); color:#fff; border:none; border-radius:10px;
+    width:38px; height:38px; display:flex; align-items:center; justify-content:center;
+    flex-shrink:0; cursor:pointer;
+  }
+  #search-btn svg.icon{width:18px; height:18px;}
+  #search-results{
+    position:absolute; top:44px; left:0; right:46px; background:var(--card);
+    border:1px solid var(--border); border-radius:10px; box-shadow:0 4px 14px rgba(0,0,0,.12);
+    z-index:40; max-height:200px; overflow-y:auto; display:none;
+  }
+  #search-results div{padding:10px 12px; font-size:13.5px; cursor:pointer; border-bottom:1px solid var(--border);}
+  #search-results div:last-child{border-bottom:none;}
+  #search-results div:active{background:var(--bg);}
 
   #locate-btn{
     background:var(--accent); color:#fff; border:none; border-radius:12px;
@@ -57,7 +81,7 @@
   #sheet{
     background:var(--card); border-top:1px solid var(--border);
     box-shadow:0 -2px 10px rgba(0,0,0,.05);
-    max-height:42%; display:flex; flex-direction:column; z-index:20;
+    max-height:28%; display:flex; flex-direction:column; z-index:20;
   }
   #sheet-handle{display:flex; justify-content:center; padding:6px 0 2px; cursor:pointer;}
   #sheet-handle span{width:36px; height:4px; background:var(--border); border-radius:2px;}
@@ -141,6 +165,11 @@
     <span class="sub" id="header-sub">Localisez-vous pour commencer</span>
   </h1>
   <button id="locate-btn" title="Me localiser"></button>
+  <div id="search-row">
+    <input id="search-input" type="text" placeholder="Chercher une adresse ou une ville…" autocomplete="off">
+    <button id="search-btn" title="Rechercher"></button>
+    <div id="search-results"></div>
+  </div>
 </header>
 
 <div style="position:relative; flex:1; min-height:0; display:flex; flex-direction:column;">
@@ -185,13 +214,15 @@
     ruler: '<svg class="icon" viewBox="0 0 24 24"><path d="M4 12h16M8 12V9M12 12V8M16 12V9M4 12l3-3M4 12l3 3M20 12l-3-3M20 12l-3 3"/></svg>',
     back: '<svg class="icon" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
     map: '<svg class="icon" viewBox="0 0 24 24"><path d="M4 5l6-2 6 2 4-1v15l-4 1-6-2-6 2V5z"/><path d="M10 3v15M16 5v15"/></svg>',
-    route: '<svg class="icon" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.3"/><circle cx="18" cy="18" r="2.3"/><path d="M6 8.3v3.7a4 4 0 0 0 4 4h4a4 4 0 0 1 4 4"/></svg>'
+    route: '<svg class="icon" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.3"/><circle cx="18" cy="18" r="2.3"/><path d="M6 8.3v3.7a4 4 0 0 0 4 4h4a4 4 0 0 1 4 4"/></svg>',
+    search: '<svg class="icon" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8"/></svg>'
   };
 
   document.getElementById('locate-btn').innerHTML = ICON.locate;
   document.getElementById('detail-back').innerHTML = ICON.back;
-  document.getElementById('btn-center').innerHTML = ICON.map + ' Voir sur la carte';
+  document.getElementById('btn-center').innerHTML = ICON.map + ' Aperçu du trajet';
   document.getElementById('btn-route').innerHTML = ICON.route + ' Itinéraire';
+  document.getElementById('search-btn').innerHTML = ICON.search;
 
   // Overpass refuse les requêtes envoyées depuis un fichier ouvert en local (origine "null").
   // Il faut servir ce fichier en http/https (GitHub Pages, ou un serveur local) pour que la recherche fonctionne.
@@ -264,7 +295,7 @@
     navigator.geolocation.getCurrentPosition(function(pos){
       userLatLng = {lat: pos.coords.latitude, lng: pos.coords.longitude};
       locateBtn.classList.remove('loading');
-      placeUserMarker();
+      placeUserMarker(false);
       map.setView([userLatLng.lat, userLatLng.lng], 15);
       currentRadiusIndex = 0;
       fetchToilets();
@@ -274,10 +305,17 @@
     }, {enableHighAccuracy:true, timeout:12000});
   });
 
-  function placeUserMarker(){
+  function placeUserMarker(isSearch){
     if(userMarker) map.removeLayer(userMarker);
+    var html = isSearch
+      ? '<div class="wc-pin" style="background:#1a73e8"><svg viewBox="0 0 24 24" style="stroke:#fff;fill:none;stroke-width:2"><circle cx="12" cy="9" r="2.3"/><path d="M12 21s6-5.7 6-10.8A6 6 0 0 0 6 10.2C6 15.3 12 21 12 21z"/></svg></div>'
+      : '<div class="user-dot"></div>';
     userMarker = L.marker([userLatLng.lat, userLatLng.lng], {
-      icon: L.divIcon({className:'', html:'<div class="user-dot"></div>', iconSize:[16,16], iconAnchor:[8,8]})
+      icon: L.divIcon({
+        className:'', html: html,
+        iconSize: isSearch ? [30,30] : [16,16],
+        iconAnchor: isSearch ? [15,30] : [8,8]
+      })
     }).addTo(map);
   }
 
@@ -449,9 +487,35 @@
 
   document.getElementById('btn-center').addEventListener('click', function(){
     var t = findToilet(selectedId);
-    if(!t) return;
+    if(!t || !userLatLng) return;
     detailEl.classList.remove('open');
-    map.setView([t.lat, t.lon], 18);
+    showStatus('Calcul du trajet à pied…');
+
+    var url = 'https://router.project-osrm.org/route/v1/foot/' +
+      userLatLng.lng + ',' + userLatLng.lat + ';' + t.lon + ',' + t.lat +
+      '?overview=full&geometries=geojson';
+
+    fetch(url).then(function(r){
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(data){
+      if(!data.routes || !data.routes.length) throw new Error('Aucun trajet trouvé');
+      var route = data.routes[0];
+      var coords = route.geometry.coordinates.map(function(c){ return [c[1], c[0]]; });
+
+      if(routeLine) map.removeLayer(routeLine);
+      routeLine = L.polyline(coords, {color:'#1a73e8', weight:5, opacity:0.85}).addTo(map);
+      map.fitBounds(routeLine.getBounds(), {padding:[40,40]});
+
+      var minutes = Math.round(route.duration / 60);
+      var km = (route.distance / 1000).toFixed(1);
+      showStatus('À pied : ' + minutes + ' min · ' + km + ' km');
+      setTimeout(hideStatus, 4000);
+    }).catch(function(err){
+      showStatus("Aperçu du trajet indisponible pour l'instant. Utilise le bouton Itinéraire.");
+      console.error(err);
+      setTimeout(hideStatus, 4000);
+    });
   });
 
   document.getElementById('btn-route').addEventListener('click', function(){
@@ -472,7 +536,59 @@
   document.getElementById('sheet-handle').addEventListener('click', function(){
     var sheet = document.getElementById('sheet');
     expanded = !expanded;
-    sheet.style.maxHeight = expanded ? '42%' : '54px';
+    sheet.style.maxHeight = expanded ? '28%' : '54px';
+  });
+
+  // ---------- Recherche d'adresse (géocodage via Nominatim / OpenStreetMap) ----------
+  var searchInput = document.getElementById('search-input');
+  var searchResultsEl = document.getElementById('search-results');
+  var routeLine = null;
+
+  function geocode(q){
+    if(!q || q.trim().length < 3) return;
+    searchResultsEl.style.display = 'block';
+    searchResultsEl.innerHTML = '<div>Recherche…</div>';
+    var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=fr&q=' + encodeURIComponent(q);
+    fetch(url).then(function(r){
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(results){
+      if(!results.length){
+        searchResultsEl.innerHTML = '<div>Aucun résultat</div>';
+        return;
+      }
+      searchResultsEl.innerHTML = '';
+      results.forEach(function(res){
+        var div = document.createElement('div');
+        div.textContent = res.display_name;
+        div.addEventListener('click', function(){
+          searchResultsEl.style.display = 'none';
+          searchInput.value = res.display_name;
+          userLatLng = {lat: parseFloat(res.lat), lng: parseFloat(res.lon)};
+          placeUserMarker(true);
+          map.setView([userLatLng.lat, userLatLng.lng], 15);
+          currentRadiusIndex = 0;
+          if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
+          fetchToilets();
+        });
+        searchResultsEl.appendChild(div);
+      });
+    }).catch(function(err){
+      searchResultsEl.innerHTML = '<div>Erreur de recherche : ' + err.message + '</div>';
+      console.error(err);
+    });
+  }
+
+  document.getElementById('search-btn').addEventListener('click', function(){
+    geocode(searchInput.value);
+  });
+  searchInput.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ geocode(searchInput.value); }
+  });
+  document.addEventListener('click', function(e){
+    if(!searchResultsEl.contains(e.target) && e.target !== searchInput){
+      searchResultsEl.style.display = 'none';
+    }
   });
 
 })();
