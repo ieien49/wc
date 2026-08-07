@@ -220,7 +220,7 @@
 
   document.getElementById('locate-btn').innerHTML = ICON.locate;
   document.getElementById('detail-back').innerHTML = ICON.back;
-  document.getElementById('btn-center').innerHTML = ICON.map + ' Aperçu du trajet';
+  document.getElementById('btn-center').innerHTML = ICON.map + ' Voir sur la carte';
   document.getElementById('btn-route').innerHTML = ICON.route + ' Itinéraire';
   document.getElementById('search-btn').innerHTML = ICON.search;
 
@@ -487,41 +487,17 @@
 
   document.getElementById('btn-center').addEventListener('click', function(){
     var t = findToilet(selectedId);
-    if(!t || !userLatLng) return;
+    if(!t) return;
     detailEl.classList.remove('open');
-    showStatus('Calcul du trajet à pied…');
-
-    var url = 'https://router.project-osrm.org/route/v1/foot/' +
-      userLatLng.lng + ',' + userLatLng.lat + ';' + t.lon + ',' + t.lat +
-      '?overview=full&geometries=geojson';
-
-    fetch(url).then(function(r){
-      if(!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    }).then(function(data){
-      if(!data.routes || !data.routes.length) throw new Error('Aucun trajet trouvé');
-      var route = data.routes[0];
-      var coords = route.geometry.coordinates.map(function(c){ return [c[1], c[0]]; });
-
-      if(routeLine) map.removeLayer(routeLine);
-      routeLine = L.polyline(coords, {color:'#1a73e8', weight:5, opacity:0.85}).addTo(map);
-      map.fitBounds(routeLine.getBounds(), {padding:[40,40]});
-
-      var minutes = Math.round(route.duration / 60);
-      var km = (route.distance / 1000).toFixed(1);
-      showStatus('À pied : ' + minutes + ' min · ' + km + ' km');
-      setTimeout(hideStatus, 4000);
-    }).catch(function(err){
-      showStatus("Aperçu du trajet indisponible pour l'instant. Utilise le bouton Itinéraire.");
-      console.error(err);
-      setTimeout(hideStatus, 4000);
-    });
+    map.setView([t.lat, t.lon], 18);
   });
 
   document.getElementById('btn-route').addEventListener('click', function(){
     var t = findToilet(selectedId);
     if(!t) return;
-    var url = 'https://www.google.com/maps/dir/?api=1&destination=' + t.lat + ',' + t.lon + '&travelmode=walking';
+    var url = 'https://www.google.com/maps/dir/?api=1' +
+      (userLatLng ? '&origin=' + userLatLng.lat + ',' + userLatLng.lng : '') +
+      '&destination=' + t.lat + ',' + t.lon + '&travelmode=walking';
     window.open(url, '_blank');
   });
 
@@ -542,7 +518,6 @@
   // ---------- Recherche d'adresse (géocodage via Nominatim / OpenStreetMap) ----------
   var searchInput = document.getElementById('search-input');
   var searchResultsEl = document.getElementById('search-results');
-  var routeLine = null;
 
   function geocode(q){
     if(!q || q.trim().length < 3) return;
@@ -568,7 +543,6 @@
           placeUserMarker(true);
           map.setView([userLatLng.lat, userLatLng.lng], 15);
           currentRadiusIndex = 0;
-          if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
           fetchToilets();
         });
         searchResultsEl.appendChild(div);
