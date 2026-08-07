@@ -527,20 +527,17 @@
   // ---------- Recherche d'adresse (géocodage via Nominatim / OpenStreetMap) ----------
   var searchInput = document.getElementById('search-input');
   var searchResultsEl = document.getElementById('search-results');
+  var searchBtn = document.getElementById('search-btn');
 
   function geocode(q){
-    console.log('geocode appelé avec', JSON.stringify(q));
-    if(!q || q.trim().length < 3) { console.log('bloqué par la garde longueur < 3'); return; }
+    if(!q || q.trim().length < 3) return;
     searchResultsEl.style.display = 'block';
     searchResultsEl.innerHTML = '<div>Recherche…</div>';
     var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=fr&q=' + encodeURIComponent(q);
-    console.log('fetch lancé vers', url);
     fetch(url).then(function(r){
-      console.log('réponse reçue, status =', r.status, 'ok =', r.ok);
       if(!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     }).then(function(results){
-      console.log('résultats parsés, nombre =', results.length, results);
       if(!results.length){
         searchResultsEl.innerHTML = '<div>Aucun résultat</div>';
         return;
@@ -560,10 +557,7 @@
         });
         searchResultsEl.appendChild(div);
       });
-      console.log('contenu inséré, childElementCount =', searchResultsEl.childElementCount);
-      console.log('display calculé =', getComputedStyle(searchResultsEl).display);
-      console.log('rect =', JSON.stringify(searchResultsEl.getBoundingClientRect()));
-      console.log('z-index calculé =', getComputedStyle(searchResultsEl).zIndex, '/ position =', getComputedStyle(searchResultsEl).position);
+      searchResultsEl.style.display = 'block';
     }).catch(function(err){
       searchResultsEl.innerHTML = '<div>Erreur de recherche : ' + err.message + '</div>';
       console.error(err);
@@ -571,14 +565,13 @@
   }
 
   document.getElementById('search-btn').addEventListener('click', function(){
-    console.log('clic détecté, valeur =', JSON.stringify(searchInput.value));
     geocode(searchInput.value);
   });
   searchInput.addEventListener('keydown', function(e){
     if(e.key === 'Enter'){ geocode(searchInput.value); }
   });
   document.addEventListener('click', function(e){
-    if(!searchResultsEl.contains(e.target) && e.target !== searchInput){
+    if(!searchResultsEl.contains(e.target) && e.target !== searchInput && e.target !== searchBtn && !searchBtn.contains(e.target)){
       searchResultsEl.style.display = 'none';
     }
   });
