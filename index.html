@@ -495,9 +495,18 @@
   document.getElementById('btn-route').addEventListener('click', function(){
     var t = findToilet(selectedId);
     if(!t) return;
-    var url = 'https://www.google.com/maps/dir/?api=1' +
-      (userLatLng ? '&origin=' + userLatLng.lat + ',' + userLatLng.lng : '') +
-      '&destination=' + t.lat + ',' + t.lon + '&travelmode=walking';
+    var isIOS = /iP(hone|od|ad)/.test(navigator.userAgent);
+    var url;
+    if(isIOS){
+      // Apple Maps : saddr force le point de départ exact, dirflg=w force le mode piéton.
+      url = 'https://maps.apple.com/?dirflg=w' +
+        (userLatLng ? '&saddr=' + userLatLng.lat + ',' + userLatLng.lng : '') +
+        '&daddr=' + t.lat + ',' + t.lon;
+    } else {
+      url = 'https://www.google.com/maps/dir/?api=1' +
+        (userLatLng ? '&origin=' + userLatLng.lat + ',' + userLatLng.lng : '') +
+        '&destination=' + t.lat + ',' + t.lon + '&travelmode=walking';
+    }
     window.open(url, '_blank');
   });
 
