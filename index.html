@@ -560,6 +560,10 @@
         });
         searchResultsEl.appendChild(div);
       });
+      console.log('contenu inséré, childElementCount =', searchResultsEl.childElementCount);
+      console.log('display calculé =', getComputedStyle(searchResultsEl).display);
+      console.log('rect =', JSON.stringify(searchResultsEl.getBoundingClientRect()));
+      console.log('z-index calculé =', getComputedStyle(searchResultsEl).zIndex, '/ position =', getComputedStyle(searchResultsEl).position);
     }).catch(function(err){
       searchResultsEl.innerHTML = '<div>Erreur de recherche : ' + err.message + '</div>';
       console.error(err);
