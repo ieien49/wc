@@ -529,7 +529,8 @@
   var searchResultsEl = document.getElementById('search-results');
 
   function geocode(q){
-    if(!q || q.trim().length < 3) return;
+    console.log('geocode appelé avec', JSON.stringify(q));
+    if(!q || q.trim().length < 3) { console.log('bloqué par la garde longueur < 3'); return; }
     searchResultsEl.style.display = 'block';
     searchResultsEl.innerHTML = '<div>Recherche…</div>';
     var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=fr&q=' + encodeURIComponent(q);
@@ -563,6 +564,7 @@
   }
 
   document.getElementById('search-btn').addEventListener('click', function(){
+    console.log('clic détecté, valeur =', JSON.stringify(searchInput.value));
     geocode(searchInput.value);
   });
   searchInput.addEventListener('keydown', function(e){
