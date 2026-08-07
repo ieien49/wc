@@ -534,10 +534,13 @@
     searchResultsEl.style.display = 'block';
     searchResultsEl.innerHTML = '<div>Recherche…</div>';
     var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=fr&q=' + encodeURIComponent(q);
+    console.log('fetch lancé vers', url);
     fetch(url).then(function(r){
+      console.log('réponse reçue, status =', r.status, 'ok =', r.ok);
       if(!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     }).then(function(results){
+      console.log('résultats parsés, nombre =', results.length, results);
       if(!results.length){
         searchResultsEl.innerHTML = '<div>Aucun résultat</div>';
         return;
