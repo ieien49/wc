@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0f6e63">
+<title>Toilettes à proximité</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root{
+    --accent:#0f6e63;
+    --accent-dark:#0a4f47;
+    --bg:#f6f7f6;
+    --card:#ffffff;
+    --text:#16211f;
+    --muted:#6b7876;
+    --border:#e1e6e4;
+    --free:#1c7c4d;
+    --paid:#b5601a;
+    --unknown:#8a8f8d;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%; margin:0; overflow:hidden;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--text); display:flex; flex-direction:column;
+  }
+  svg.icon{width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:1.8;
+    stroke-linecap:round; stroke-linejoin:round; display:block; flex-shrink:0;}
+
+  header{
+    padding:12px 16px 10px; background:var(--card); border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:10px; z-index:20;
+  }
+  header h1{font-size:17px; margin:0; font-weight:700; flex:1;}
+  header h1 .sub{display:block; font-size:11px; font-weight:500; color:var(--muted); margin-top:1px;}
+
+  #locate-btn{
+    background:var(--accent); color:#fff; border:none; border-radius:12px;
+    width:44px; height:44px; display:flex; align-items:center; justify-content:center;
+    flex-shrink:0; cursor:pointer;
+  }
+  #locate-btn svg.icon{width:22px; height:22px; stroke-width:2;}
+  #locate-btn:active{background:var(--accent-dark);}
+  #locate-btn.loading svg{animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  #map{flex:1; min-height:0; width:100%;}
+
+  #status{
+    position:absolute; top:66px; left:50%; transform:translateX(-50%);
+    background:var(--accent-dark); color:#fff; padding:7px 14px; border-radius:20px;
+    font-size:13px; z-index:30; box-shadow:0 2px 8px rgba(0,0,0,.2); display:none;
+    max-width:85%; text-align:center;
+  }
+
+  #sheet{
+    background:var(--card); border-top:1px solid var(--border);
+    box-shadow:0 -2px 10px rgba(0,0,0,.05);
+    max-height:42%; display:flex; flex-direction:column; z-index:20;
+  }
+  #sheet-handle{display:flex; justify-content:center; padding:6px 0 2px; cursor:pointer;}
+  #sheet-handle span{width:36px; height:4px; background:var(--border); border-radius:2px;}
+  #sheet-title{
+    padding:0 16px 8px; font-size:12px; color:var(--muted); font-weight:600;
+    text-transform:uppercase; letter-spacing:.03em;
+  }
+  #list{overflow-y:auto; padding:0 8px 12px;}
+
+  .item{
+    display:flex; align-items:center; gap:12px; padding:10px 8px; border-radius:12px;
+    cursor:pointer; border:1px solid transparent;
+  }
+  .item.active{background:#eef6f4; border-color:var(--accent);}
+  .item .icn{
+    width:36px; height:36px; border-radius:10px; background:var(--bg); color:var(--accent);
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .item .icn svg.icon{width:19px; height:19px;}
+  .item .info{flex:1; min-width:0;}
+  .item .name{font-size:14.5px; font-weight:600; margin:0;}
+  .item .meta{font-size:12.5px; color:var(--muted); margin-top:2px; display:flex; gap:6px; flex-wrap:wrap; align-items:center;}
+  .tag{padding:2px 8px 2px 6px; border-radius:8px; font-size:11px; font-weight:600; display:inline-flex; align-items:center; gap:3px;}
+  .tag svg.icon{width:12px; height:12px; stroke-width:2.2;}
+  .tag.free{background:#e4f4ea; color:var(--free);}
+  .tag.paid{background:#faeada; color:var(--paid);}
+  .tag.unknown{background:#eee; color:var(--unknown);}
+  .item .dist{font-size:13px; font-weight:700; color:var(--accent); white-space:nowrap;}
+
+  #empty{padding:24px 16px; text-align:center; color:var(--muted); font-size:13.5px;}
+  #empty button{
+    margin-top:12px; background:var(--accent); color:#fff; border:none; border-radius:10px;
+    padding:9px 16px; font-size:13px; font-weight:600; cursor:pointer;
+  }
+
+  #detail{
+    position:fixed; inset:0; background:var(--card); z-index:50;
+    display:none; flex-direction:column;
+  }
+  #detail.open{display:flex;}
+  #detail-header{
+    padding:14px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px;
+  }
+  #detail-back{background:none; border:none; color:var(--accent); cursor:pointer; padding:0 4px; display:flex;}
+  #detail-back svg.icon{width:24px; height:24px; stroke-width:2.2;}
+  #detail-header h2{font-size:16px; margin:0; flex:1;}
+  #detail-body{padding:16px; overflow-y:auto; flex:1;}
+  .drow{display:flex; gap:12px; padding:10px 0; border-bottom:1px solid var(--border); align-items:flex-start;}
+  .drow:last-child{border-bottom:none;}
+  .drow .di{color:var(--accent); width:24px; flex-shrink:0; display:flex; justify-content:center; padding-top:1px;}
+  .drow .di svg.icon{width:19px; height:19px;}
+  .drow .dl{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; font-weight:600;}
+  .drow .dv{font-size:14.5px; margin-top:2px;}
+  #detail-actions{padding:14px 16px 20px; border-top:1px solid var(--border); display:flex; gap:10px;}
+  .btn{
+    flex:1; border:none; border-radius:12px; padding:14px; font-size:15px; font-weight:700;
+    cursor:pointer; text-align:center; display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .btn svg.icon{width:18px; height:18px; stroke-width:2.1;}
+  .btn-primary{background:var(--accent); color:#fff;}
+  .btn-primary:active{background:var(--accent-dark);}
+  .btn-secondary{background:var(--bg); color:var(--text); border:1px solid var(--border);}
+
+  .leaflet-marker-icon.wc-marker{background:none; border:none;}
+  .wc-pin{
+    width:30px; height:30px; border-radius:50% 50% 50% 0; background:var(--accent);
+    transform:rotate(-45deg); display:flex; align-items:center; justify-content:center;
+    box-shadow:0 2px 5px rgba(0,0,0,.3); border:2px solid #fff;
+  }
+  .wc-pin svg{transform:rotate(45deg); width:15px; height:15px; stroke:#fff; fill:none; stroke-width:2;}
+  .wc-pin.selected{background:#c0392b; width:36px; height:36px;}
+  .wc-pin.selected svg{width:18px; height:18px;}
+
+  .user-dot{width:16px; height:16px; border-radius:50%; background:#1a73e8; border:3px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.4);}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Toilettes à proximité
+    <span class="sub" id="header-sub">Localisez-vous pour commencer</span>
+  </h1>
+  <button id="locate-btn" title="Me localiser"></button>
+</header>
+
+<div style="position:relative; flex:1; min-height:0; display:flex; flex-direction:column;">
+  <div id="status"></div>
+  <div id="map"></div>
+</div>
+
+<div id="sheet">
+  <div id="sheet-handle"><span></span></div>
+  <div id="sheet-title">Toilettes les plus proches</div>
+  <div id="list"><div id="empty">Appuyez sur le bouton de localisation pour voir les toilettes publiques autour de vous.</div></div>
+</div>
+
+<div id="detail">
+  <div id="detail-header">
+    <button id="detail-back"></button>
+    <h2 id="detail-name">Toilettes</h2>
+  </div>
+  <div id="detail-body"></div>
+  <div id="detail-actions">
+    <button class="btn btn-secondary" id="btn-center"></button>
+    <button class="btn btn-primary" id="btn-route"></button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  // ---------- Pictos SVG (style ligne, sans dépendance externe) ----------
+  var ICON = {
+    locate: '<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/></svg>',
+    wc: '<svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="1.5"/><circle cx="15" cy="12" r="1"/></svg>',
+    coin: '<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 9.5c0-1 1-1.7 2.5-1.7s2.5.6 2.5 1.6c0 2.2-5 1-5 3.2 0 1 1 1.6 2.5 1.6s2.5-.7 2.5-1.7"/></svg>',
+    check: '<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M8.5 12.3l2.3 2.3 4.7-5"/></svg>',
+    help: '<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M9.5 9.3c0-1.4 1.1-2.3 2.5-2.3s2.5.9 2.5 2.1c0 1.6-2.5 1.8-2.5 3.4"/><circle cx="12" cy="16.2" r="0.4" fill="currentColor"/></svg>',
+    clock: '<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+    wheelchair: '<svg class="icon" viewBox="0 0 24 24"><circle cx="9" cy="4.5" r="1.6"/><path d="M9 8v4l4 2M9 12H5.5a3 3 0 1 0 2.3 4.9L11 12"/><path d="M13.5 12h4.5"/></svg>',
+    baby: '<svg class="icon" viewBox="0 0 24 24"><path d="M4 20v-3a8 8 0 0 1 16 0v3"/><circle cx="12" cy="7" r="4"/></svg>',
+    key: '<svg class="icon" viewBox="0 0 24 24"><circle cx="8" cy="9" r="3.5"/><path d="M10.3 11.3L19 20M15.5 15.8l2.3-2.3M18 18.3l2-2"/></svg>',
+    ruler: '<svg class="icon" viewBox="0 0 24 24"><path d="M4 12h16M8 12V9M12 12V8M16 12V9M4 12l3-3M4 12l3 3M20 12l-3-3M20 12l-3 3"/></svg>',
+    back: '<svg class="icon" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
+    map: '<svg class="icon" viewBox="0 0 24 24"><path d="M4 5l6-2 6 2 4-1v15l-4 1-6-2-6 2V5z"/><path d="M10 3v15M16 5v15"/></svg>',
+    route: '<svg class="icon" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.3"/><circle cx="18" cy="18" r="2.3"/><path d="M6 8.3v3.7a4 4 0 0 0 4 4h4a4 4 0 0 1 4 4"/></svg>'
+  };
+
+  document.getElementById('locate-btn').innerHTML = ICON.locate;
+  document.getElementById('detail-back').innerHTML = ICON.back;
+  document.getElementById('btn-center').innerHTML = ICON.map + ' Voir sur la carte';
+  document.getElementById('btn-route').innerHTML = ICON.route + ' Itinéraire';
+
+  // Overpass refuse les requêtes envoyées depuis un fichier ouvert en local (origine "null").
+  // Il faut servir ce fichier en http/https (GitHub Pages, ou un serveur local) pour que la recherche fonctionne.
+  var OPENED_AS_LOCAL_FILE = (location.protocol === 'file:');
+  if(OPENED_AS_LOCAL_FILE){
+    document.getElementById('header-sub').textContent = 'Fichier ouvert en local : héberge-le en HTTPS (ex. GitHub Pages) pour que la recherche fonctionne';
+  }
+
+  var map = L.map('map', {zoomControl:false}).setView([47.0, 0.0], 6);
+  L.control.zoom({position:'bottomright'}).addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom:19, attribution:'© OpenStreetMap'
+  }).addTo(map);
+
+  var userLatLng = null;
+  var userMarker = null;
+  var toiletMarkers = {};
+  var toiletsData = [];
+  var selectedId = null;
+
+  // Rayons essayés successivement tant qu'aucun résultat n'est trouvé (en mètres)
+  var RADIUS_STEPS = [2000, 5000, 10000];
+  var currentRadiusIndex = 0;
+
+  // Serveurs Overpass, essayés dans l'ordre en cas d'échec du premier
+  var OVERPASS_ENDPOINTS = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter'
+  ];
+
+  var statusEl = document.getElementById('status');
+  var headerSub = document.getElementById('header-sub');
+  var listEl = document.getElementById('list');
+  var locateBtn = document.getElementById('locate-btn');
+  var detailEl = document.getElementById('detail');
+
+  function showStatus(msg){ statusEl.textContent = msg; statusEl.style.display = 'block'; }
+  function hideStatus(){ statusEl.style.display = 'none'; }
+
+  function distanceMeters(lat1, lon1, lat2, lon2){
+    var R = 6371000;
+    var dLat = (lat2-lat1) * Math.PI/180;
+    var dLon = (lon2-lon1) * Math.PI/180;
+    var a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+            Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+            Math.sin(dLon/2)*Math.sin(dLon/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+  function formatDist(m){
+    if(m < 1000) return Math.round(m/10)*10 + ' m';
+    return (m/1000).toFixed(1) + ' km';
+  }
+
+  function wcIcon(selected){
+    return L.divIcon({
+      className:'wc-marker',
+      html:'<div class="wc-pin' + (selected?' selected':'') + '">' + ICON.wc + '</div>',
+      iconSize: selected ? [36,36] : [30,30],
+      iconAnchor: selected ? [18,36] : [15,30]
+    });
+  }
+
+  locateBtn.addEventListener('click', function(){
+    if(!navigator.geolocation){
+      showStatus("La géolocalisation n'est pas disponible sur cet appareil.");
+      return;
+    }
+    locateBtn.classList.add('loading');
+    showStatus('Localisation en cours…');
+    navigator.geolocation.getCurrentPosition(function(pos){
+      userLatLng = {lat: pos.coords.latitude, lng: pos.coords.longitude};
+      locateBtn.classList.remove('loading');
+      placeUserMarker();
+      map.setView([userLatLng.lat, userLatLng.lng], 15);
+      currentRadiusIndex = 0;
+      fetchToilets();
+    }, function(err){
+      locateBtn.classList.remove('loading');
+      showStatus('Localisation impossible : ' + (err.message || 'accès refusé') + '. Vérifie les autorisations.');
+    }, {enableHighAccuracy:true, timeout:12000});
+  });
+
+  function placeUserMarker(){
+    if(userMarker) map.removeLayer(userMarker);
+    userMarker = L.marker([userLatLng.lat, userLatLng.lng], {
+      icon: L.divIcon({className:'', html:'<div class="user-dot"></div>', iconSize:[16,16], iconAnchor:[8,8]})
+    }).addTo(map);
+  }
+
+  function buildQuery(radius){
+    return '[out:json][timeout:20];' +
+      '(node["amenity"="toilets"](around:' + radius + ',' + userLatLng.lat + ',' + userLatLng.lng + ');' +
+      'way["amenity"="toilets"](around:' + radius + ',' + userLatLng.lat + ',' + userLatLng.lng + ');' +
+      'relation["amenity"="toilets"](around:' + radius + ',' + userLatLng.lat + ',' + userLatLng.lng + '););' +
+      'out center tags;';
+  }
+
+  function queryOverpass(endpointIndex, radius){
+    var query = buildQuery(radius);
+    var url = OVERPASS_ENDPOINTS[endpointIndex] + '?data=' + encodeURIComponent(query);
+    return fetch(url).then(function(r){
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(data){
+      return data.elements || [];
+    }).catch(function(err){
+      if(endpointIndex + 1 < OVERPASS_ENDPOINTS.length){
+        return queryOverpass(endpointIndex + 1, radius);
+      }
+      throw err;
+    });
+  }
+
+  function fetchToilets(){
+    if(OPENED_AS_LOCAL_FILE){
+      showStatus("Impossible d'interroger OpenStreetMap depuis un fichier local. Héberge ce fichier en HTTPS (GitHub Pages) et réessaie.");
+      return;
+    }
+    var radius = RADIUS_STEPS[currentRadiusIndex];
+    showStatus('Recherche dans un rayon de ' + (radius/1000) + ' km…');
+
+    queryOverpass(0, radius).then(function(elements){
+      var results = toResults(elements);
+      if(results.length === 0 && currentRadiusIndex < RADIUS_STEPS.length - 1){
+        currentRadiusIndex++;
+        fetchToilets();
+        return;
+      }
+      handleResults(results, radius);
+    }).catch(function(err){
+      showStatus("Erreur réseau OpenStreetMap : " + err.message + ". Vérifie ta connexion et réessaie.");
+      console.error(err);
+    });
+  }
+
+  function toResults(elements){
+    var results = [];
+    elements.forEach(function(el){
+      var lat = el.lat || (el.center && el.center.lat);
+      var lon = el.lon || (el.center && el.center.lon);
+      if(lat == null || lon == null) return;
+      var tags = el.tags || {};
+      var d = distanceMeters(userLatLng.lat, userLatLng.lng, lat, lon);
+      results.push({ id: el.type + '/' + el.id, lat: lat, lon: lon, tags: tags, dist: d });
+    });
+    results.sort(function(a,b){ return a.dist - b.dist; });
+    return results;
+  }
+
+  function handleResults(results, radiusUsed){
+    Object.keys(toiletMarkers).forEach(function(id){ map.removeLayer(toiletMarkers[id]); });
+    toiletMarkers = {};
+    toiletsData = results;
+
+    toiletsData.forEach(function(t){
+      var marker = L.marker([t.lat, t.lon], {icon: wcIcon(false)}).addTo(map);
+      marker.on('click', function(){ selectToilet(t.id); });
+      toiletMarkers[t.id] = marker;
+    });
+
+    hideStatus();
+    renderList(radiusUsed);
+
+    if(toiletsData.length === 0){
+      headerSub.textContent = "Aucune toilette recensée jusqu'à " + (radiusUsed/1000) + ' km';
+    } else {
+      headerSub.textContent = toiletsData.length + ' toilette(s) trouvée(s) — rayon ' + (radiusUsed/1000) + ' km';
+    }
+  }
+
+  function feeInfo(tags){
+    if(tags.fee === 'no') return {cls:'free', txt:'Gratuit', icon: ICON.check};
+    if(tags.fee === 'yes') return {cls:'paid', txt:'Payant', icon: ICON.coin};
+    return {cls:'unknown', txt:'Tarif inconnu', icon: ICON.help};
+  }
+
+  function renderList(radiusUsed){
+    listEl.innerHTML = '';
+    if(toiletsData.length === 0){
+      var div = document.createElement('div');
+      div.id = 'empty';
+      div.innerHTML = "Aucune toilette publique référencée sur OpenStreetMap jusqu'à " + (radiusUsed/1000) + " km. C'est une limite des données, pas forcément une absence réelle sur place." +
+        (currentRadiusIndex < RADIUS_STEPS.length - 1 ? '' : '<br><button id="retry-btn">Élargir encore la recherche</button>');
+      listEl.appendChild(div);
+      return;
+    }
+    toiletsData.forEach(function(t){
+      var fee = feeInfo(t.tags);
+      var name = t.tags.name || 'Toilettes publiques';
+      var el = document.createElement('div');
+      el.className = 'item' + (t.id === selectedId ? ' active' : '');
+      el.innerHTML =
+        '<div class="icn">' + ICON.wc.replace('<svg', '<svg class="icon"') + '</div>' +
+        '<div class="info">' +
+          '<p class="name">' + escapeHtml(name) + '</p>' +
+          '<div class="meta">' +
+            '<span class="tag ' + fee.cls + '">' + fee.icon + fee.txt + '</span>' +
+            (t.tags.wheelchair === 'yes' ? '<span class="tag free">' + ICON.wheelchair.replace('class="icon"','class="icon" style="width:12px;height:12px"') + 'PMR</span>' : '') +
+            (t.tags.opening_hours ? '<span>' + escapeHtml(t.tags.opening_hours) + '</span>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="dist">' + formatDist(t.dist) + '</div>';
+      el.addEventListener('click', function(){ openDetail(t.id); });
+      listEl.appendChild(el);
+    });
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  function selectToilet(id){
+    if(selectedId && toiletMarkers[selectedId]) toiletMarkers[selectedId].setIcon(wcIcon(false));
+    selectedId = id;
+    if(toiletMarkers[id]) toiletMarkers[id].setIcon(wcIcon(true));
+    renderList(RADIUS_STEPS[currentRadiusIndex]);
+  }
+
+  function findToilet(id){
+    for(var i=0;i<toiletsData.length;i++){ if(toiletsData[i].id === id) return toiletsData[i]; }
+    return null;
+  }
+
+  function openDetail(id){
+    var t = findToilet(id);
+    if(!t) return;
+    selectToilet(id);
+    var tags = t.tags;
+    var fee = feeInfo(tags);
+    document.getElementById('detail-name').textContent = tags.name || 'Toilettes publiques';
+
+    var rows = [];
+    rows.push(row(fee.icon, 'Tarif', fee.txt + (tags.charge ? ' — ' + escapeHtml(tags.charge) : '')));
+    rows.push(row(ICON.clock, 'Horaires', tags.opening_hours ? escapeHtml(tags.opening_hours) : 'Non renseignées'));
+    rows.push(row(ICON.wheelchair, 'Accessibilité PMR', tags.wheelchair === 'yes' ? 'Accessible' : (tags.wheelchair === 'no' ? 'Non accessible' : 'Non renseignée')));
+    if(tags.unisex) rows.push(row(ICON.wc, 'Type', tags.unisex === 'yes' ? 'Mixte' : 'Séparées'));
+    if(tags['changing_table']) rows.push(row(ICON.baby, 'Table à langer', tags['changing_table'] === 'yes' ? 'Oui' : 'Non'));
+    if(tags.access && tags.access !== 'yes') rows.push(row(ICON.key, 'Accès', escapeHtml(tags.access)));
+    rows.push(row(ICON.ruler, 'Distance', formatDist(t.dist) + " à pied à vol d'oiseau"));
+
+    document.getElementById('detail-body').innerHTML = rows.join('');
+    detailEl.classList.add('open');
+  }
+
+  function row(iconSvg, label, value){
+    return '<div class="drow"><div class="di">' + iconSvg + '</div>' +
+      '<div><div class="dl">' + label + '</div><div class="dv">' + value + '</div></div></div>';
+  }
+
+  document.getElementById('detail-back').addEventListener('click', function(){
+    detailEl.classList.remove('open');
+  });
+
+  document.getElementById('btn-center').addEventListener('click', function(){
+    var t = findToilet(selectedId);
+    if(!t) return;
+    detailEl.classList.remove('open');
+    map.setView([t.lat, t.lon], 18);
+  });
+
+  document.getElementById('btn-route').addEventListener('click', function(){
+    var t = findToilet(selectedId);
+    if(!t) return;
+    var url = 'https://www.google.com/maps/dir/?api=1&destination=' + t.lat + ',' + t.lon + '&travelmode=walking';
+    window.open(url, '_blank');
+  });
+
+  listEl.addEventListener('click', function(e){
+    if(e.target && e.target.id === 'retry-btn'){
+      currentRadiusIndex = Math.min(currentRadiusIndex + 1, RADIUS_STEPS.length - 1);
+      fetchToilets();
+    }
+  });
+
+  var expanded = true;
+  document.getElementById('sheet-handle').addEventListener('click', function(){
+    var sheet = document.getElementById('sheet');
+    expanded = !expanded;
+    sheet.style.maxHeight = expanded ? '42%' : '54px';
+  });
+
+})();
+</script>
+</body>
+</html>
