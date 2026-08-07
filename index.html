@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0f6e63">
 <title>Toilettes à proximité</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%230f6e63'/%3E%3Crect x='30' y='22' width='40' height='54' rx='6' fill='white'/%3E%3Ccircle cx='58' cy='49' r='4.2' fill='%230f6e63'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   :root{
@@ -36,9 +37,10 @@
   header h1 .sub{display:block; font-size:11px; font-weight:500; color:var(--muted); margin-top:1px;}
 
   #search-row{
-    display:flex; align-items:center; gap:8px; width:100%; order:3;
-    margin-top:2px; position:relative;
+    display:none; align-items:center; gap:8px; width:100%; order:3;
+    margin-top:8px; position:relative;
   }
+  #search-row.open{display:flex;}
   #search-input{
     flex:1; border:1px solid var(--border); background:var(--bg); border-radius:10px;
     padding:9px 12px; font-size:14px; color:var(--text); min-width:0;
@@ -68,6 +70,15 @@
   #locate-btn:active{background:var(--accent-dark);}
   #locate-btn.loading svg{animation:spin 1s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
+
+  #home-btn, #search-toggle-btn{
+    background:var(--bg); color:var(--accent); border:1px solid var(--border); border-radius:12px;
+    width:44px; height:44px; display:flex; align-items:center; justify-content:center;
+    flex-shrink:0; cursor:pointer;
+  }
+  #home-btn svg.icon, #search-toggle-btn svg.icon{width:20px; height:20px; stroke-width:2;}
+  #home-btn:active, #search-toggle-btn:active{background:var(--border);}
+  #search-toggle-btn.active{background:var(--accent); color:#fff; border-color:var(--accent);}
 
   #map{flex:1; min-height:0; width:100%;}
 
@@ -164,7 +175,9 @@
   <h1>Toilettes à proximité
     <span class="sub" id="header-sub">Localisez-vous pour commencer</span>
   </h1>
+  <button id="home-btn" title="Retour à l'accueil"></button>
   <button id="locate-btn" title="Me localiser"></button>
+  <button id="search-toggle-btn" title="Rechercher une adresse"></button>
   <div id="search-row">
     <input id="search-input" type="text" placeholder="Chercher une adresse ou une ville…" autocomplete="off">
     <button id="search-btn" title="Rechercher"></button>
@@ -215,7 +228,9 @@
     back: '<svg class="icon" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
     map: '<svg class="icon" viewBox="0 0 24 24"><path d="M4 5l6-2 6 2 4-1v15l-4 1-6-2-6 2V5z"/><path d="M10 3v15M16 5v15"/></svg>',
     route: '<svg class="icon" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.3"/><circle cx="18" cy="18" r="2.3"/><path d="M6 8.3v3.7a4 4 0 0 0 4 4h4a4 4 0 0 1 4 4"/></svg>',
-    search: '<svg class="icon" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8"/></svg>'
+    search: '<svg class="icon" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8"/></svg>',
+    close: '<svg class="icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    home: '<svg class="icon" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v9a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9"/><path d="M10 20v-6h4v6"/></svg>'
   };
 
   document.getElementById('locate-btn').innerHTML = ICON.locate;
@@ -223,6 +238,8 @@
   document.getElementById('btn-center').innerHTML = ICON.map + ' Voir sur la carte';
   document.getElementById('btn-route').innerHTML = ICON.route + ' Itinéraire';
   document.getElementById('search-btn').innerHTML = ICON.search;
+  document.getElementById('search-toggle-btn').innerHTML = ICON.search;
+  document.getElementById('home-btn').innerHTML = ICON.home;
 
   // Overpass refuse les requêtes envoyées depuis un fichier ouvert en local (origine "null").
   // Il faut servir ce fichier en http/https (GitHub Pages, ou un serveur local) pour que la recherche fonctionne.
@@ -518,16 +535,47 @@
   });
 
   var expanded = true;
+  var sheetEl = document.getElementById('sheet');
   document.getElementById('sheet-handle').addEventListener('click', function(){
-    var sheet = document.getElementById('sheet');
     expanded = !expanded;
-    sheet.style.maxHeight = expanded ? '28%' : '54px';
+    sheetEl.style.maxHeight = expanded ? '28%' : '54px';
+  });
+
+  document.getElementById('home-btn').addEventListener('click', function(){
+    detailEl.classList.remove('open');
+    closeSearch();
+    hideStatus();
+    expanded = true;
+    sheetEl.style.maxHeight = '28%';
+    if(userLatLng){
+      map.setView([userLatLng.lat, userLatLng.lng], 15);
+    } else {
+      map.setView([47.0, 0.0], 6);
+    }
   });
 
   // ---------- Recherche d'adresse (géocodage via Nominatim / OpenStreetMap) ----------
   var searchInput = document.getElementById('search-input');
   var searchResultsEl = document.getElementById('search-results');
   var searchBtn = document.getElementById('search-btn');
+  var searchRowEl = document.getElementById('search-row');
+  var searchToggleBtn = document.getElementById('search-toggle-btn');
+
+  function openSearch(){
+    searchRowEl.classList.add('open');
+    searchToggleBtn.classList.add('active');
+    searchToggleBtn.innerHTML = ICON.close;
+    setTimeout(function(){ searchInput.focus(); }, 50);
+  }
+  function closeSearch(){
+    searchRowEl.classList.remove('open');
+    searchToggleBtn.classList.remove('active');
+    searchToggleBtn.innerHTML = ICON.search;
+    searchResultsEl.style.display = 'none';
+  }
+  searchToggleBtn.addEventListener('click', function(){
+    if(searchRowEl.classList.contains('open')) closeSearch(); else openSearch();
+  });
 
   function geocode(q){
     if(!q || q.trim().length < 3) return;
@@ -547,8 +595,8 @@
         var div = document.createElement('div');
         div.textContent = res.display_name;
         div.addEventListener('click', function(){
-          searchResultsEl.style.display = 'none';
           searchInput.value = res.display_name;
+          closeSearch();
           userLatLng = {lat: parseFloat(res.lat), lng: parseFloat(res.lon)};
           placeUserMarker(true);
           map.setView([userLatLng.lat, userLatLng.lng], 15);
@@ -574,6 +622,14 @@
     if(!searchResultsEl.contains(e.target) && e.target !== searchInput && e.target !== searchBtn && !searchBtn.contains(e.target)){
       searchResultsEl.style.display = 'none';
     }
+    if(searchRowEl.classList.contains('open') &&
+       !searchRowEl.contains(e.target) &&
+       e.target !== searchToggleBtn && !searchToggleBtn.contains(e.target)){
+      if(!searchInput.value.trim()) closeSearch();
+    }
+  });
+  searchInput.addEventListener('keydown', function(e){
+    if(e.key === 'Escape') closeSearch();
   });
 
 })();
